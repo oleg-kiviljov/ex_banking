@@ -11,6 +11,8 @@ defmodule ExBanking.User do
   end
 
   def create(name) when is_binary(name) do
-    GenServer.start_link(__MODULE__, name, [])
+    GenServer.start_link(__MODULE__, name, name: via_tuple(name))
   end
+
+  def via_tuple(name), do: {:via, Registry, {Registry.User, name}}
 end
