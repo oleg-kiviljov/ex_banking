@@ -29,7 +29,7 @@ defmodule ExBanking.User do
     {:error, :wrong_arguments}
   end
 
-  def via_tuple(username), do: {:via, Registry, {Registry.User, username}}
+  defp via_tuple(username), do: {:via, Registry, {Registry.User, username}}
 
   def handle_call(%{action: :deposit, amount: amount, currency: currency}, _from, state) do
     {:reply, state, state}
