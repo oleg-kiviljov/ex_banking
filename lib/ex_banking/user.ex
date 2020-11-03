@@ -14,5 +14,9 @@ defmodule ExBanking.User do
     GenServer.start_link(__MODULE__, username, name: via_tuple(username))
   end
 
+  def create(_username) do
+    {:error, :wrong_arguments}
+  end
+
   def via_tuple(username), do: {:via, Registry, {Registry.User, username}}
 end
