@@ -12,9 +12,14 @@ defmodule ExBanking do
     :too_many_requests_to_sender    |
     :too_many_requests_to_receiver
   }
-  
+
   @spec create_user(user :: String.t) :: :ok | banking_error
   def create_user(user) do
     User.create(user)
+  end
+  
+  @spec deposit(user :: String.t, amount :: number, currency :: String.t) :: {:ok, new_balance :: number} | banking_error
+  def deposit(user, amount, currency) do
+    User.deposit(user, amount, currency)
   end
 end
