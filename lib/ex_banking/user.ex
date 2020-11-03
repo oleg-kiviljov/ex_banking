@@ -11,7 +11,10 @@ defmodule ExBanking.User do
   end
 
   def create(username) when is_binary(username) do
-    GenServer.start_link(__MODULE__, username, name: via_tuple(username))
+    case GenServer.start_link(__MODULE__, username, name: via_tuple(username)) do
+      {:ok, _pid} -> :ok
+      {:error, {:already_started, _pid}} -> {:error, :already_exists}
+    end
   end
 
   def create(_username) do
