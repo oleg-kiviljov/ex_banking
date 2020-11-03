@@ -21,5 +21,17 @@ defmodule ExBanking.User do
     {:error, :wrong_arguments}
   end
 
+  def deposit(username, amount, currency) when is_binary(username) and is_binary(currency) and is_number(amount) do
+    GenServer.call(via_tuple(username), %{action: :deposit, amount: amount, currency: currency})
+  end
+
+  def deposit(_username, _amount, _currency) do
+    {:error, :wrong_arguments}
+  end
+
   def via_tuple(username), do: {:via, Registry, {Registry.User, username}}
+
+  def handle_call(%{action: :deposit, amount: amount, currency: currency}, _from, state) do
+    {:reply, state, state}
+  end
 end
