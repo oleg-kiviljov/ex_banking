@@ -1,18 +1,7 @@
 defmodule ExBanking do
-  @moduledoc """
-  Documentation for `ExBanking`.
-  """
+  alias ExBanking.{User}
 
-  @doc """
-  Hello world.
-
-  ## Examples
-
-      iex> ExBanking.hello()
-      :world
-
-  """
-  def hello do
-    :world
+  def create_user(user) do
+    User.create(user)
   end
 end
