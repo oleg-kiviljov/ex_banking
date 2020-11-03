@@ -12,7 +12,8 @@ defmodule ExBanking do
     :too_many_requests_to_sender    |
     :too_many_requests_to_receiver
   }
-
+  
+  @spec create_user(user :: String.t) :: :ok | banking_error
   def create_user(user) do
     User.create(user)
   end
