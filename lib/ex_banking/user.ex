@@ -1,19 +1,20 @@
 defmodule ExBanking.User do
   use GenServer
 
+  alias ExBanking.{Wallet}
   alias __MODULE__
 
-  @enforce_keys [:username, :wallet]
-  defstruct [:username, :wallet]
+  @enforce_keys [:username]
+  defstruct [:username]
 
   def init(username) do
-    {:ok, %User{username: username, wallet: Map.new}}
+    {:ok, %User{username: username}}
   end
 
   def create(username) when is_binary(username) do
     case GenServer.start_link(__MODULE__, username, name: via_tuple(username)) do
       {:ok, _pid} -> :ok
-      {:error, {:already_started, _pid}} -> {:error, :already_exists}
+      {:error, {:already_started, _pid}} -> {:error, :user_already_exists}
     end
   end
 
@@ -68,73 +69,23 @@ defmodule ExBanking.User do
   end
 
   def handle_call(%{action: :deposit, amount: amount, currency: currency}, _from, state) do
-    with {:ok, new_balance} <- confirm_deposit(state, amount, currency)
-    do
-      state |>
-      add_currency(currency) |>
-      increase_balance(amount, currency) |>
-      reply_with(new_balance)
-    end
+    Wallet.create(state.username, currency)
+    new_balance = Wallet.add_balance(state.username, amount, currency)
+    reply_with(state, new_balance)
   end
 
   def handle_call(%{action: :withdraw, amount: amount, currency: currency}, _from, state) do
-    with {:ok, new_balance} <- confirm_withdraw(state, amount, currency)
-    do
-      state |>
-      decrease_balance(amount, currency) |>
-      reply_with(new_balance)
-    else
-      _ -> reply_with(state, {:error, :not_enough_money})
+    Wallet.create(state.username, currency)
+    case Wallet.deduct_balance(state.username, amount, currency) do
+      {:ok, new_balance} -> reply_with(state, new_balance)
+      {:error, error} -> reply_with(state, {:error, error})
     end
   end
 
   def handle_call(%{action: :get_balance, currency: currency}, _from, state) do
-    balance = retrieve_balance(state, currency)
+    Wallet.create(state.username, currency)
+    balance = Wallet.get_balance(state.username, currency)
     reply_with(state, balance)
-  end
-
-  defp confirm_deposit(%User{wallet: wallet}, amount, currency) do
-    new_balance = case Map.get(wallet, currency) do
-      nil -> 0 + amount
-      value -> value + amount
-    end
-    if new_balance >= 0, do: {:ok, new_balance}
-  end
-
-  defp confirm_withdraw(%User{wallet: wallet}, amount, currency) do
-    new_balance = case Map.get(wallet, currency) do
-      nil -> 0 - amount
-      value -> value - amount
-    end
-    if new_balance >= 0, do: {:ok, new_balance}
-  end
-
-  defp add_currency(state, currency) do
-    %User{wallet: wallet} = state
-    wallet = Map.put_new(wallet, currency, 0)
-    put_in(state.wallet, wallet)
-  end
-
-  defp increase_balance(state, amount, currency) do
-    %User{wallet: wallet} = state
-    new_balance = Map.get(wallet, currency) + amount
-    wallet = Map.put(wallet, currency, new_balance)
-    put_in(state.wallet, wallet)
-  end
-
-  defp decrease_balance(state, amount, currency) do
-    %User{wallet: wallet} = state
-    new_balance = Map.get(wallet, currency) - amount
-    wallet = Map.put(wallet, currency, new_balance)
-    put_in(state.wallet, wallet)
-  end
-
-  def retrieve_balance(state, currency) do
-    %User{wallet: wallet} = state
-    case Map.get(wallet, currency) do
-      nil -> 0
-      value -> value
-    end
   end
 
   defp reply_with(state, reply) do

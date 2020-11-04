@@ -7,7 +7,8 @@ defmodule ExBanking.Application do
 
   def start(_type, _args) do
     children = [
-      {Registry, keys: :unique, name: Registry.User}
+      {Registry, keys: :unique, name: Registry.User},
+      {Registry, keys: :unique, name: Registry.Wallet}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
