@@ -23,7 +23,7 @@ defmodule ExBanking.MixProject do
   defp deps do
     [
       {:credo, "~> 1.5", only: [:dev, :test], runtime: false},
-      {:money, "~> 1.4"}
+      {:decimal, "~> 2.0"}
     ]
   end
 end
