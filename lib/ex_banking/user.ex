@@ -53,6 +53,20 @@ defmodule ExBanking.User do
     {:error, :wrong_arguments}
   end
 
+  def get_balance(username, currency)
+  when is_binary(username)
+  and is_binary(currency)
+  do
+    case lookup_user(username) do
+      [] -> {:error, :user_does_not_exist}
+      [{_pid, _}] -> GenServer.call(via_tuple(username), %{action: :get_balance, currency: currency})
+    end
+  end
+
+  def get_balance(_username, _currency) do
+    {:error, :wrong_arguments}
+  end
+
   def handle_call(%{action: :deposit, amount: amount, currency: currency}, _from, state) do
     with {:ok, new_balance} <- confirm_deposit(state, amount, currency)
     do
@@ -72,6 +86,11 @@ defmodule ExBanking.User do
     else
       _ -> reply_with(state, {:error, :not_enough_money})
     end
+  end
+
+  def handle_call(%{action: :get_balance, currency: currency}, _from, state) do
+    balance = retrieve_balance(state, currency)
+    reply_with(state, balance)
   end
 
   defp confirm_deposit(%User{wallet: wallet}, amount, currency) do
@@ -108,6 +127,14 @@ defmodule ExBanking.User do
     new_balance = Map.get(wallet, currency) - amount
     wallet = Map.put(wallet, currency, new_balance)
     put_in(state.wallet, wallet)
+  end
+
+  def retrieve_balance(state, currency) do
+    %User{wallet: wallet} = state
+    case Map.get(wallet, currency) do
+      nil -> 0
+      value -> value
+    end
   end
 
   defp reply_with(state, reply) do
