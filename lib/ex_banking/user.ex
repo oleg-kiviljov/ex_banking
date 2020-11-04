@@ -27,8 +27,8 @@ defmodule ExBanking.User do
   and is_number(amount)
   and amount > 0
   do
-    case Registry.lookup(Registry.User, username) do
-      [] -> false
+    case lookup_user(username) do
+      [] -> {:error, :user_does_not_exist}
       [{_pid, _}] -> GenServer.call(via_tuple(username), %{action: :deposit, amount: amount, currency: currency})
     end
   end
@@ -37,30 +37,85 @@ defmodule ExBanking.User do
     {:error, :wrong_arguments}
   end
 
+  def withdraw(username, amount, currency)
+  when is_binary(username)
+  and is_binary(currency)
+  and is_number(amount)
+  and amount > 0
+  do
+    case lookup_user(username) do
+      [] -> {:error, :user_does_not_exist}
+      [{_pid, _}] -> GenServer.call(via_tuple(username), %{action: :withdraw, amount: amount, currency: currency})
+    end
+  end
+
+  def withdraw(_username, _amount, _currency) do
+    {:error, :wrong_arguments}
+  end
+
   def handle_call(%{action: :deposit, amount: amount, currency: currency}, _from, state) do
-    state |>
+    with {:ok, new_balance} <- confirm_deposit(state, amount, currency)
+    do
+      state |>
       add_currency(currency) |>
       increase_balance(amount, currency) |>
-      successful_deposit(currency)
+      reply_with(new_balance)
+    end
   end
 
-  defp increase_balance(state, amount, currency) do
-    %User{wallet: wallet} = state
-    new_balance = Map.get(wallet, currency)  + amount
-    wallet = Map.put(wallet, currency, new_balance)
-    put_in(state.wallet, wallet)
+  def handle_call(%{action: :withdraw, amount: amount, currency: currency}, _from, state) do
+    with {:ok, new_balance} <- confirm_withdraw(state, amount, currency)
+    do
+      state |>
+      decrease_balance(amount, currency) |>
+      reply_with(new_balance)
+    else
+      _ -> reply_with(state, {:error, :not_enough_money})
+    end
   end
 
-  def add_currency(state, currency) do
+  defp confirm_deposit(%User{wallet: wallet}, amount, currency) do
+    new_balance = case Map.get(wallet, currency) do
+      nil -> 0 + amount
+      value -> value + amount
+    end
+    if new_balance >= 0, do: {:ok, new_balance}
+  end
+
+  defp confirm_withdraw(%User{wallet: wallet}, amount, currency) do
+    new_balance = case Map.get(wallet, currency) do
+      nil -> 0 - amount
+      value -> value - amount
+    end
+    if new_balance >= 0, do: {:ok, new_balance}
+  end
+
+  defp add_currency(state, currency) do
     %User{wallet: wallet} = state
     wallet = Map.put_new(wallet, currency, 0)
     put_in(state.wallet, wallet)
   end
 
-  defp successful_deposit(state, currency) do
+  defp increase_balance(state, amount, currency) do
     %User{wallet: wallet} = state
-    new_balance = Map.get(wallet, currency)
-    {:reply, new_balance, state}
+    new_balance = Map.get(wallet, currency) + amount
+    wallet = Map.put(wallet, currency, new_balance)
+    put_in(state.wallet, wallet)
+  end
+
+  defp decrease_balance(state, amount, currency) do
+    %User{wallet: wallet} = state
+    new_balance = Map.get(wallet, currency) - amount
+    wallet = Map.put(wallet, currency, new_balance)
+    put_in(state.wallet, wallet)
+  end
+
+  defp reply_with(state, reply) do
+    {:reply, reply, state}
+  end
+
+  defp lookup_user(username) do
+    Registry.lookup(Registry.User, username)
   end
 
   defp via_tuple(username), do: {:via, Registry, {Registry.User, username}}
