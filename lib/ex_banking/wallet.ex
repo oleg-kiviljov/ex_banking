@@ -1,4 +1,6 @@
 defmodule ExBanking.Wallet do
+  @moduledoc false
+
   use GenServer
 
   alias __MODULE__

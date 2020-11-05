@@ -1,4 +1,6 @@
 defmodule ExBanking do
+  @moduledoc false
+
   alias ExBanking.{User}
 
   @type banking_error :: {:error,
