@@ -9,8 +9,10 @@ defmodule ExBanking.Wallet do
   @enforce_keys [:currency, :balance]
   defstruct [:currency, :balance]
 
+  @precision 2
+
   def init(currency) do
-    {:ok, %Wallet{currency: currency, balance: D.new(0)}}
+    {:ok, %Wallet{currency: currency, balance: as_decimal(0)}}
   end
 
   def create(username, currency) do
@@ -18,11 +20,11 @@ defmodule ExBanking.Wallet do
   end
 
   def add_balance(username, amount, currency) do
-    GenServer.call(via_tuple(username, currency), %{action: :add_balance, amount: amount})
+    GenServer.call(via_tuple(username, currency), %{action: :add_balance, amount: as_decimal(amount)})
   end
 
   def deduct_balance(username, amount, currency) do
-    GenServer.call(via_tuple(username, currency), %{action: :deduct_balance, amount: amount})
+    GenServer.call(via_tuple(username, currency), %{action: :deduct_balance, amount: as_decimal(amount)})
   end
 
   def get_balance(username, currency) do
@@ -30,7 +32,7 @@ defmodule ExBanking.Wallet do
   end
 
   def transfer(from_username, to_username, amount, currency) do
-    GenServer.call(via_tuple(from_username, currency), %{action: :transfer, beneficiary: to_username, amount: amount, currency: currency})
+    GenServer.call(via_tuple(from_username, currency), %{action: :transfer, beneficiary: to_username, amount: as_decimal(amount), currency: currency})
   end
 
   def handle_call(%{action: :add_balance, amount: amount}, _from, state) do
@@ -66,16 +68,20 @@ defmodule ExBanking.Wallet do
   end
 
   defp add_amount(current_balance, amount) do
-    {:ok, D.add(current_balance, D.new(amount))}
+    {:ok, D.add(current_balance, amount)}
   end
 
   defp subtract_amount(current_balance, amount) do
-    new_balance = D.sub(current_balance, D.new(amount))
-    if D.compare(new_balance, 0) == :gt || D.equal?(new_balance, 0) do
+    new_balance = D.sub(current_balance, amount)
+    if D.positive?(new_balance) || D.equal?(new_balance, 0) do
       {:ok, new_balance}
     else
       {:error, :not_enough_money}
     end
+  end
+
+  defp as_decimal(amount) do
+    amount |> to_string() |> D.new() |> Decimal.round(@precision)
   end
 
   defp reply_with(state, reply) do
