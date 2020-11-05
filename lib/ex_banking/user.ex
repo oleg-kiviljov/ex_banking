@@ -68,10 +68,38 @@ defmodule ExBanking.User do
     {:error, :wrong_arguments}
   end
 
+  def send(from_username, to_username, amount, currency)
+  when is_binary(from_username)
+  and is_binary(to_username)
+  and is_binary(currency)
+  and is_number(amount)
+  and amount > 0
+  do
+    with [{_pid, _}] <- lookup_user(from_username),
+         [{_pid, _}] <- lookup_user(to_username)
+    do
+      Wallet.create(from_username, currency)
+      Wallet.create(to_username, currency)
+
+      case Wallet.transfer(from_username, to_username, amount, currency) do
+        {:ok, from_user_balance, to_user_balance} -> {:ok, from_user_balance, to_user_balance}
+        {:error, error} -> {:error, error}
+      end
+    else
+      _ -> {:error, :user_does_not_exist}
+    end
+  end
+
+  def send(_from_username, _to_username, _amount, _currency) do
+    {:error, :wrong_arguments}
+  end
+
   def handle_call(%{action: :deposit, amount: amount, currency: currency}, _from, state) do
     Wallet.create(state.username, currency)
-    new_balance = Wallet.add_balance(state.username, amount, currency)
-    reply_with(state, new_balance)
+    case Wallet.add_balance(state.username, amount, currency) do
+      {:ok, new_balance} -> reply_with(state, new_balance)
+      {:error, error} -> reply_with(state, {:error, error})
+    end
   end
 
   def handle_call(%{action: :withdraw, amount: amount, currency: currency}, _from, state) do

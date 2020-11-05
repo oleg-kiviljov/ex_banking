@@ -14,7 +14,7 @@ defmodule ExBanking.Wallet do
   def create(username, currency) do
     case GenServer.start_link(__MODULE__, currency, name: via_tuple(username, currency)) do
       {:ok, _pid} -> :ok
-      {:error, {:already_started, _pid}} -> {:error, :already_exists}
+      {:error, {:already_started, _pid}} -> {:error, :wallet_already_exists}
     end
   end
 
@@ -30,25 +30,53 @@ defmodule ExBanking.Wallet do
     GenServer.call(via_tuple(username, currency), %{action: :get_balance})
   end
 
+  def transfer(from_username, to_username, amount, currency) do
+    GenServer.call(via_tuple(from_username, currency), %{action: :transfer, beneficiary: to_username, amount: amount, currency: currency})
+  end
+
   def handle_call(%{action: :add_balance, amount: amount}, _from, state) do
-    new_balance = D.add(state.balance, D.new(amount))
-    put_in(state.balance, new_balance) |>
-      reply_with(new_balance)
+    case add_amount(state.balance, amount) do
+      {:ok, new_balance} ->
+        put_in(state.balance, new_balance) |>
+        reply_with({:ok, new_balance})
+    end
   end
 
   def handle_call(%{action: :deduct_balance, amount: amount}, _from, state) do
-    new_balance = D.sub(state.balance, D.new(amount))
-    cond do
-      D.compare(new_balance, 0) == :gt || D.equal?(new_balance, 0) ->
+    case subtract_amount(state.balance, amount) do
+      {:ok, new_balance} ->
         put_in(state.balance, new_balance) |>
         reply_with({:ok, new_balance})
-      true ->
-        reply_with(state, {:error, :not_enough_money})
+      {:error, error} -> reply_with(state, {:error, error})
     end
   end
 
   def handle_call(%{action: :get_balance}, _from, state) do
     reply_with(state, state.balance)
+  end
+
+  def handle_call(%{action: :transfer, beneficiary: beneficiary, amount: amount, currency: currency}, _from, state) do
+    with {:ok, new_balance} <- subtract_amount(state.balance, amount),
+         {:ok, new_beneficiary_balance} <- GenServer.call(via_tuple(beneficiary, currency), %{action: :add_balance, amount: amount, currency: currency})
+    do
+      put_in(state.balance, new_balance) |>
+        reply_with({:ok, new_balance, new_beneficiary_balance})
+    else
+      {:error, error} -> reply_with(state, {:error, error})
+    end
+  end
+
+  defp add_amount(current_balance, amount) do
+    {:ok, D.add(current_balance, D.new(amount))}
+  end
+
+  defp subtract_amount(current_balance, amount) do
+    new_balance = D.sub(current_balance, D.new(amount))
+    if D.compare(new_balance, 0) == :gt || D.equal?(new_balance, 0) do
+      {:ok, new_balance}
+    else
+      {:error, :not_enough_money}
+    end
   end
 
   defp reply_with(state, reply) do
