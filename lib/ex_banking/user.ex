@@ -79,8 +79,8 @@ defmodule ExBanking.User do
     process_request(from_name, currency, fn(sender_pid) ->
       process_request(to_name, currency, fn(beneficiary_pid) ->
         GenServer.call(sender_pid, %{action: :send, beneficiary: beneficiary_pid, amount: amount, currency: currency})
-      end, :too_many_requests_to_receiver)
-    end,  :too_many_requests_to_sender)
+      end, :receiver_does_not_exist, :too_many_requests_to_receiver)
+    end, :sender_does_not_exist, :too_many_requests_to_sender)
   end
 
   def send(_from_name, _to_name, _amount, _currency) do
@@ -132,6 +132,8 @@ defmodule ExBanking.User do
     {:noreply, put_in(state.requests, state.requests - 1)}
   end
 
+  defp track_request(state), do: {:noreply, put_in(state.requests, state.requests + 1)}
+
   defp complete_request(from, func) do
     pid = self()
 
@@ -142,10 +144,10 @@ defmodule ExBanking.User do
     end)
   end
 
-  def process_request(name, currency, func, error \\ :too_many_requests_to_user) do
+  def process_request(name, currency, func, lookup_error \\ :user_does_not_exist, request_error \\ :too_many_requests_to_user) do
     with :ok <- Wallet.create(name, currency),
-         {:ok, pid} <- lookup_user(name),
-         {:ok, _} <- allow_request(pid, error)
+         {:ok, pid} <- lookup_user(name, lookup_error),
+         {:ok, _} <- allow_request(pid, request_error)
     do
       func.(pid)
     else
@@ -153,8 +155,11 @@ defmodule ExBanking.User do
     end
   end
 
-  defp track_request(state) do
-    {:noreply, put_in(state.requests, state.requests + 1)}
+  defp lookup_user(name, error) do
+    case Registry.lookup(Registry.User, name) do
+      [{pid, _}] -> {:ok, pid}
+      [] -> {:error, error}
+    end
   end
 
   def allow_request(pid, error) do
@@ -163,13 +168,6 @@ defmodule ExBanking.User do
       {:error, error}
     else
       {:ok, requests}
-    end
-  end
-
-  defp lookup_user(name) do
-    case Registry.lookup(Registry.User, name) do
-      [{pid, _}] -> {:ok, pid}
-      [] -> {:error, :user_does_not_exist}
     end
   end
 end
