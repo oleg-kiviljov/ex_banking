@@ -32,7 +32,7 @@ defmodule ExBanking.User do
   and is_number(amount)
   and amount > 0
   do
-    process_request(username, fn() ->
+    process_request(username, currency, fn() ->
       GenServer.call(via_tuple(username), %{action: :deposit, amount: amount, currency: currency})
     end)
   end
@@ -47,7 +47,7 @@ defmodule ExBanking.User do
   and is_number(amount)
   and amount > 0
   do
-    process_request(username, fn() ->
+    process_request(username, currency, fn() ->
       GenServer.call(via_tuple(username), %{action: :withdraw, amount: amount, currency: currency})
     end)
   end
@@ -60,7 +60,7 @@ defmodule ExBanking.User do
   when is_binary(username)
   and is_binary(currency)
   do
-    process_request(username, fn() ->
+    process_request(username, currency, fn() ->
       GenServer.call(via_tuple(username), %{action: :get_balance, currency: currency})
     end)
   end
@@ -76,19 +76,11 @@ defmodule ExBanking.User do
   and is_number(amount)
   and amount > 0
   do
-    with [{_pid, _}] <- lookup_user(from_username),
-         [{_pid, _}] <- lookup_user(to_username)
-    do
-      Wallet.create(from_username, currency)
-      Wallet.create(to_username, currency)
-
-      case Wallet.transfer(from_username, to_username, amount, currency) do
-        {:ok, from_user_balance, to_user_balance} -> {:ok, from_user_balance, to_user_balance}
-        {:error, error} -> {:error, error}
-      end
-    else
-      _ -> {:error, :user_does_not_exist}
-    end
+    process_request(from_username, currency, fn() ->
+      process_request(to_username, currency, fn() ->
+        GenServer.call(via_tuple(from_username), %{action: :send, beneficiary: to_username, amount: amount, currency: currency})
+      end, :too_many_requests_to_receiver)
+    end,  :too_many_requests_to_sender)
   end
 
   def send(_from_username, _to_username, _amount, _currency ) do
@@ -97,7 +89,6 @@ defmodule ExBanking.User do
 
   def handle_call(%{action: :deposit, amount: amount, currency: currency}, from, state) do
     complete_request(from, fn() ->
-      Wallet.create(state.username, currency)
       case Wallet.add_balance(state.username, amount, currency) do
         {:ok, new_balance} -> new_balance
         {:error, error} -> {:error, error}
@@ -108,7 +99,6 @@ defmodule ExBanking.User do
 
   def handle_call(%{action: :withdraw, amount: amount, currency: currency}, from, state) do
     complete_request(from, fn() ->
-      Wallet.create(state.username, currency)
       case Wallet.deduct_balance(state.username, amount, currency) do
         {:ok, new_balance} -> new_balance
         {:error, error} -> {:error, error}
@@ -119,7 +109,6 @@ defmodule ExBanking.User do
 
   def handle_call(%{action: :get_balance, currency: currency}, from, state) do
     complete_request(from, fn() ->
-      Wallet.create(state.username, currency)
       Wallet.get_balance(state.username, currency)
     end)
     track_request(state)
@@ -129,23 +118,36 @@ defmodule ExBanking.User do
     {:reply, state.requests, state}
   end
 
+  def handle_call(%{action: :send, beneficiary: beneficiary, amount: amount, currency: currency}, from, state) do
+    {:ok, beneficiary_pid} = lookup_user(beneficiary)
+
+    complete_request(from, fn() ->
+      case Wallet.transfer(state.username, beneficiary_pid, amount, currency) do
+        {:ok, from_user_balance, to_user_balance} -> {:ok, from_user_balance, to_user_balance}
+        {:error, error} -> {:error, error}
+      end
+    end)
+    track_request(state)
+  end
+
   def handle_cast(:request_completed, state) do
     {:noreply, put_in(state.requests, state.requests - 1)}
   end
 
-  defp complete_request(initiator, func) do
+  defp complete_request(from, func) do
     pid = self()
 
     spawn_link(fn() ->
       result = func.()
       GenServer.cast(pid, :request_completed)
-      GenServer.reply(initiator, result)
+      GenServer.reply(from, result)
     end)
   end
 
-  def process_request(username, func) do
-    with {:ok, _} <- lookup_user(username),
-         {:ok, _} <- allow_request(username)
+  def process_request(username, currency, func, error \\ :too_many_requests_to_user) do
+    with :ok <- Wallet.create(username, currency),
+         {:ok, _} <- lookup_user(username),
+         {:ok, _} <- allow_request(username, error)
     do
       func.()
     else
@@ -157,10 +159,10 @@ defmodule ExBanking.User do
     {:noreply, put_in(state.requests, state.requests + 1)}
   end
 
-  def allow_request(username) do
+  def allow_request(username, error) do
     requests = GenServer.call(via_tuple(username), %{action: :get_requests})
     if requests >= @max_requests do
-      {:error, :too_many_requests_to_user}
+      {:error, error}
     else
       {:ok, requests}
     end

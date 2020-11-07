@@ -16,7 +16,10 @@ defmodule ExBanking.Wallet do
   end
 
   def create(username, currency) do
-    GenServer.start_link(__MODULE__, currency, name: via_tuple(username, currency))
+    case GenServer.start_link(__MODULE__, currency, name: via_tuple(username, currency)) do
+      {:ok, _pid} -> :ok
+      {:error, {:already_started, _pid}} -> :ok
+    end
   end
 
   def add_balance(username, amount, currency) do
@@ -58,7 +61,7 @@ defmodule ExBanking.Wallet do
 
   def handle_call(%{action: :transfer, beneficiary: beneficiary, amount: amount, currency: currency}, _from, state) do
     with {:ok, new_balance} <- subtract_amount(state.balance, amount),
-         {:ok, new_beneficiary_balance} <- GenServer.call(via_tuple(beneficiary, currency), %{action: :add_balance, amount: amount, currency: currency})
+         new_beneficiary_balance <- GenServer.call(beneficiary, %{action: :deposit, amount: amount, currency: currency})
     do
       put_in(state.balance, new_balance) |>
         reply_with({:ok, new_balance, new_beneficiary_balance})
