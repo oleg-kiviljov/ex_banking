@@ -15,27 +15,27 @@ defmodule ExBanking.Wallet do
     {:ok, %Wallet{currency: currency, balance: as_decimal(0)}}
   end
 
-  def create(username, currency) do
-    case GenServer.start_link(__MODULE__, currency, name: via_tuple(username, currency)) do
+  def create(name, currency) do
+    case GenServer.start_link(__MODULE__, currency, name: via_tuple(name, currency)) do
       {:ok, _pid} -> :ok
       {:error, {:already_started, _pid}} -> :ok
     end
   end
 
-  def add_balance(username, amount, currency) do
-    GenServer.call(via_tuple(username, currency), %{action: :add_balance, amount: as_decimal(amount)})
+  def add_balance(name, amount, currency) do
+    GenServer.call(via_tuple(name, currency), %{action: :add_balance, amount: as_decimal(amount)})
   end
 
-  def deduct_balance(username, amount, currency) do
-    GenServer.call(via_tuple(username, currency), %{action: :deduct_balance, amount: as_decimal(amount)})
+  def deduct_balance(name, amount, currency) do
+    GenServer.call(via_tuple(name, currency), %{action: :deduct_balance, amount: as_decimal(amount)})
   end
 
-  def get_balance(username, currency) do
-    GenServer.call(via_tuple(username, currency), %{action: :get_balance})
+  def get_balance(name, currency) do
+    GenServer.call(via_tuple(name, currency), %{action: :get_balance})
   end
 
-  def transfer(from_username, to_username, amount, currency) do
-    GenServer.call(via_tuple(from_username, currency), %{action: :transfer, beneficiary: to_username, amount: as_decimal(amount), currency: currency})
+  def transfer(from_name, to_name, amount, currency) do
+    GenServer.call(via_tuple(from_name, currency), %{action: :transfer, beneficiary: to_name, amount: as_decimal(amount), currency: currency})
   end
 
   def handle_call(%{action: :add_balance, amount: amount}, _from, state) do
@@ -91,5 +91,5 @@ defmodule ExBanking.Wallet do
     {:reply, reply, state}
   end
 
-  defp via_tuple(username, currency), do: {:via, Registry, {Registry.Wallet, "#{username}_#{currency}"}}
+  defp via_tuple(name, currency), do: {:via, Registry, {Registry.Wallet, "#{name}_#{currency}"}}
 end
