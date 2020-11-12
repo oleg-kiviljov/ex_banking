@@ -56,7 +56,7 @@ defmodule ExBanking.Wallet do
   end
 
   def handle_call(%{action: :get_balance}, _from, state) do
-    reply_with(state, state.balance)
+    reply_with(state, as_float(state.balance))
   end
 
   def handle_call(%{action: :transfer, beneficiary: beneficiary, amount: amount, currency: currency}, _from, state) do
@@ -71,13 +71,13 @@ defmodule ExBanking.Wallet do
   end
 
   defp add_amount(current_balance, amount) do
-    {:ok, D.add(current_balance, amount)}
+    {:ok, D.add(current_balance, amount) |> as_float}
   end
 
   defp subtract_amount(current_balance, amount) do
     new_balance = D.sub(current_balance, amount)
     if D.positive?(new_balance) || D.equal?(new_balance, 0) do
-      {:ok, new_balance}
+      {:ok, as_float(new_balance)}
     else
       {:error, :not_enough_money}
     end
@@ -85,6 +85,10 @@ defmodule ExBanking.Wallet do
 
   defp as_decimal(amount) do
     amount |> to_string() |> D.new() |> Decimal.round(@precision)
+  end
+
+  defp as_float(amount) do
+    D.to_float(amount)
   end
 
   defp reply_with(state, reply) do
