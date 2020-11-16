@@ -90,7 +90,7 @@ defmodule ExBanking.User do
   def handle_call(%{action: :deposit, amount: amount, currency: currency}, from, state) do
     complete_request(from, fn() ->
       case Wallet.add_balance(state.name, amount, currency) do
-        {:ok, new_balance} -> new_balance
+        {:ok, new_balance} -> {:ok, new_balance}
         {:error, error} -> {:error, error}
       end
     end)
@@ -100,7 +100,7 @@ defmodule ExBanking.User do
   def handle_call(%{action: :withdraw, amount: amount, currency: currency}, from, state) do
     complete_request(from, fn() ->
       case Wallet.deduct_balance(state.name, amount, currency) do
-        {:ok, new_balance} -> new_balance
+        {:ok, new_balance} -> {:ok, new_balance}
         {:error, error} -> {:error, error}
       end
     end)
@@ -109,7 +109,7 @@ defmodule ExBanking.User do
 
   def handle_call(%{action: :get_balance, currency: currency}, from, state) do
     complete_request(from, fn() ->
-      Wallet.get_balance(state.name, currency)
+      {:ok, Wallet.get_balance(state.name, currency)}
     end)
     track_request(state)
   end

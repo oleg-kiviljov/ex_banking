@@ -42,7 +42,7 @@ defmodule ExBanking.Wallet do
     case add_amount(state.balance, amount) do
       {:ok, new_balance} ->
         put_in(state.balance, new_balance) |>
-          reply_with({:ok, new_balance})
+          reply_with({:ok, as_float(new_balance)})
     end
   end
 
@@ -50,7 +50,7 @@ defmodule ExBanking.Wallet do
     case subtract_amount(state.balance, amount) do
       {:ok, new_balance} ->
         put_in(state.balance, new_balance) |>
-          reply_with({:ok, new_balance})
+          reply_with({:ok, as_float(new_balance)})
       {:error, error} -> reply_with(state, {:error, error})
     end
   end
@@ -61,23 +61,23 @@ defmodule ExBanking.Wallet do
 
   def handle_call(%{action: :transfer, beneficiary: beneficiary, amount: amount, currency: currency}, _from, state) do
     with {:ok, new_balance} <- subtract_amount(state.balance, amount),
-         new_beneficiary_balance <- GenServer.call(beneficiary, %{action: :deposit, amount: amount, currency: currency})
+         {:ok, new_beneficiary_balance} <- GenServer.call(beneficiary, %{action: :deposit, amount: amount, currency: currency})
     do
       put_in(state.balance, new_balance) |>
-        reply_with({:ok, new_balance, new_beneficiary_balance})
+        reply_with({:ok, as_float(new_balance), new_beneficiary_balance})
     else
       {:error, error} -> reply_with(state, {:error, error})
     end
   end
 
   defp add_amount(current_balance, amount) do
-    {:ok, D.add(current_balance, amount) |> as_float}
+    {:ok, D.add(current_balance, amount)}
   end
 
   defp subtract_amount(current_balance, amount) do
     new_balance = D.sub(current_balance, amount)
     if D.positive?(new_balance) || D.equal?(new_balance, 0) do
-      {:ok, as_float(new_balance)}
+      {:ok, new_balance}
     else
       {:error, :not_enough_money}
     end
