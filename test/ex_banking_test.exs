@@ -64,6 +64,13 @@ defmodule ExBankingTest do
     end
   end
 
+  describe "deposit/3 with request limit exceeded" do
+    test "it returns :too_many_requests_to_user error", %{name: name} do
+      ExBanking.create_user(name, 0)
+      assert {:error, :too_many_requests_to_user} == ExBanking.deposit(name, 10, "EUR")
+    end
+  end
+
   describe "withdraw/3 with valid args and enough balance in wallet" do
     test "it returns new balance of an user", %{name: name} do
       ExBanking.create_user(name)
@@ -98,6 +105,14 @@ defmodule ExBankingTest do
     end
   end
 
+  describe "withdraw/3 with request limit exceeded" do
+    test "it returns :too_many_requests_to_user error", %{name: name} do
+      ExBanking.create_user(name, 0)
+      
+      assert {:error, :too_many_requests_to_user} == ExBanking.withdraw(name, 10, "EUR")
+    end
+  end
+
   describe "get_balance/2 with valid args and new wallet" do
     test "it returns balance of an user", %{name: name} do
       ExBanking.create_user(name)
@@ -127,6 +142,14 @@ defmodule ExBankingTest do
   describe "get_balance/2 with non-existing user" do
     test "it returns :user_does_not_exist error" do
       assert {:error, :user_does_not_exist} == ExBanking.get_balance("non_existing_user", "EUR")
+    end
+  end
+
+  describe "get_balance/2 with request limit exceeded" do
+    test "it returns :too_many_requests_to_user error", %{name: name} do
+      ExBanking.create_user(name, 0)
+
+      assert {:error, :too_many_requests_to_user} == ExBanking.get_balance(name, "EUR")
     end
   end
 
@@ -200,6 +223,32 @@ defmodule ExBankingTest do
       ExBanking.create_user(name)
 
       assert {:error, :receiver_does_not_exist} == ExBanking.send(name, "non_existing_receiver", 10, "EUR")
+    end
+  end
+
+  describe "send/4 with sender request limit exceeded" do
+    test "it returns :too_many_requests_to_sender error" do
+      sender = generate_name()
+      receiver = generate_name()
+
+      ExBanking.create_user(sender, 0)
+      ExBanking.create_user(receiver, 10)
+
+      assert {:error, :too_many_requests_to_sender} == ExBanking.send(sender, receiver, 10, "EUR")
+    end
+  end
+
+  describe "send/4 with receiver request limit exceeded" do
+    test "it returns :too_many_requests_to_receiver error" do
+      sender = generate_name()
+      receiver = generate_name()
+
+      ExBanking.create_user(sender)
+      ExBanking.create_user(receiver, 0)
+
+      ExBanking.deposit(sender, 10, "EUR")
+
+      assert {:error, :too_many_requests_to_receiver} == ExBanking.send(sender, receiver, 10, "EUR")
     end
   end
 
