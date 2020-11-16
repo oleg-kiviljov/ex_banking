@@ -16,8 +16,8 @@ defmodule ExBanking do
   }
 
   @spec create_user(user :: String.t) :: :ok | banking_error
-  def create_user(user) do
-    User.create(user)
+  def create_user(user, max_requests \\ 10) do
+    User.create(user, max_requests)
   end
 
   @spec deposit(user :: String.t, amount :: number, currency :: String.t) :: {:ok, new_balance :: number} | banking_error

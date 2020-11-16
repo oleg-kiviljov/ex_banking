@@ -6,23 +6,21 @@ defmodule ExBanking.User do
   alias ExBanking.{Wallet}
   alias __MODULE__
 
-  @enforce_keys [:name, :requests]
-  defstruct [:name, :requests]
+  @enforce_keys [:name, :requests, :max_requests]
+  defstruct [:name, :requests, :max_requests]
 
-  @max_requests 10
-
-  def init(name) do
-    {:ok, %User{name: name, requests: 0}}
+  def init({name, max_requests}) do
+    {:ok, %User{name: name, requests: 0, max_requests: max_requests}}
   end
 
-  def create(name) when is_binary(name) do
-    case GenServer.start_link(__MODULE__, name, name: {:via, Registry, {Registry.User, name}}) do
+  def create(name, max_requests) when is_binary(name) do
+    case GenServer.start_link(__MODULE__, {name, max_requests}, name: {:via, Registry, {Registry.User, name}}) do
       {:ok, _pid} -> :ok
       {:error, {:already_started, _pid}} -> {:error, :user_already_exists}
     end
   end
 
-  def create(_name) do
+  def create(_name, _max_requests) do
     {:error, :wrong_arguments}
   end
 
@@ -118,6 +116,10 @@ defmodule ExBanking.User do
     {:reply, state.requests, state}
   end
 
+  def handle_call(%{action: :get_max_requests}, _from, state) do
+    {:reply, state.max_requests, state}
+  end
+
   def handle_call(%{action: :send, beneficiary: beneficiary, amount: amount, currency: currency}, from, state) do
     complete_request(from, fn() ->
       case Wallet.transfer(state.name, beneficiary, amount, currency) do
@@ -164,7 +166,8 @@ defmodule ExBanking.User do
 
   def allow_request(pid, error) do
     requests = GenServer.call(pid, %{action: :get_requests})
-    if requests >= @max_requests do
+    max_requests = GenServer.call(pid, %{action: :get_max_requests})
+    if requests >= max_requests do
       {:error, error}
     else
       {:ok, requests}
