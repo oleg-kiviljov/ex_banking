@@ -8,13 +8,13 @@ defmodule ExBankingTest do
     {:ok, name: generate_name()}
   end
 
-  describe "create_user/1 with valid args" do
+  describe "create_user/2 with valid args" do
     test "it creates user", %{name: name} do
       assert :ok == ExBanking.create_user(name)
     end
   end
 
-  describe "create_user/1 with invalid args" do
+  describe "create_user/2 with invalid args" do
     test "it returns :wrong_arguments error" do
       Enum.each(@invalid_args, fn arg ->
         assert {:error, :wrong_arguments} == ExBanking.create_user(arg)
@@ -22,7 +22,7 @@ defmodule ExBankingTest do
     end
   end
 
-  describe "create_user/1 with non-unique name" do
+  describe "create_user/2 with non-unique name" do
     test "it returns :user_already_exists error", %{name: name} do
       ExBanking.create_user(name)
 
